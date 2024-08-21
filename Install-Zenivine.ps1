@@ -150,8 +150,6 @@ foreach ($profileDir in $profileDirs) {
     } else {
         # Prepare the new preferences
         $widevinePrefs = @(
-            "user_pref('media.gmp-widevinecdm.abi', '$arch');",
-            "user_pref('media.gmp-widevinecdm.version', '$version-$regularArch');"
             "user_pref('media.gmp-widevinecdm.visible', true);"
             "user_pref('media.gmp-widevinecdm.enabled', true);"
             "user_pref('media.gmp-manager.url', 'https://aus5.mozilla.org/update/3/GMP/%VERSION%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/%OS_VERSION%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%/update.xml');"
