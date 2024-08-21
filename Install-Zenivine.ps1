@@ -49,16 +49,26 @@ $os = $null
 $arch = $null
 $regularArch = if ([System.Environment]::Is64BitProcess) { "x64" } else { "x86" }
 
-if ($IsWindows) {
+if ($PSVersionTable.PSVersion.Major -ge 6) {
+    # PowerShell Core (Cross-platform)
+    $osPlatform = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
+    if ($osPlatform) {
+        $os = "WINNT"
+        $arch = if ([System.Environment]::Is64BitProcess) { "x86_64-msvc" } else { "x86-msvc" }
+    } elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Linux)) {
+        $os = "Linux"
+        $arch = "x86_64-gcc3"
+    } elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::OSX)) {
+        $os = "Darwin"
+        $arch = if ([System.Environment]::Is64BitProcess) { "x86_64-gcc3" } else { "aarch64-gcc3" }
+    }
+} else {
+    # Windows PowerShell
     $os = "WINNT"
     $arch = if ([System.Environment]::Is64BitProcess) { "x86_64-msvc" } else { "x86-msvc" }
-} elseif ($IsMacOS) {
-    $os = "Darwin"
-    $arch = if ([System.Environment]::Is64BitProcess) { "x86_64-gcc3" } else { "aarch64-gcc3" }
-} elseif ($IsLinux) {
-    $os = "Linux"
-    $arch = "x86_64-gcc3"
-} else {
+}
+
+if (-not $os) {
     Log-Message "Unsupported operating system. Exiting script." -important
     exit 1
 }
