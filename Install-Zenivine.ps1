@@ -1,6 +1,7 @@
 # Enable dry run mode by setting this to $true
 $dryRun = $false
 
+
 # Define a logging function
 function Log-Message {
     param (
@@ -12,6 +13,78 @@ function Log-Message {
         Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $message" -ForegroundColor Yellow
     } else {
         Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $message"
+    }
+}
+
+# Cache Detected Platform
+$detectedPlatform = $null;
+
+# Detect Base OS
+function Detect-Platform {
+    if ($detectedPlatform -ne $null) {
+        return $detectedPlatform
+    }
+
+    $detectedPlatform = "" | Select-Object -Property os,arch,regularArch
+
+    if ($PSVersionTable.PSVersion.Major -ge 6) {
+        # PowerShell Core (Cross-platform)
+        $osPlatform = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
+        if ($osPlatform) {
+            $detectedPlatform.os = "WINNT"
+            $detectedPlatform.arch = if ([System.Environment]::Is64BitProcess) { "x86_64-msvc" } else { "x86-msvc" }
+        } elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Linux)) {
+            $detectedPlatform.os = "Linux"
+            $detectedPlatform.arch = "x86_64-gcc3"
+        } elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::OSX)) {
+            $detectedPlatform.os = "Darwin"
+            $detectedPlatform.arch = if ([System.Environment]::Is64BitProcess) { "x86_64-gcc3" } else { "aarch64-gcc3" }
+        }
+    } else {
+        # Windows PowerShell
+        $detectedPlatform.os = "WINNT"
+        $detectedPlatform.arch = if ([System.Environment]::Is64BitProcess) { "x86_64-msvc" } else { "x86-msvc" }
+    }
+
+    if (-not $detectedPlatform.os) {
+        Log-Message "Unsupported operating system. Exiting script." -important
+        exit 1
+    }
+
+    $detectedPlatform.regularArch = if ([System.Environment]::Is64BitProcess) { "x64" } else { "x86" }
+
+    return $detectedPlatform
+}
+
+function OS-Temp-Directory {
+    $platform = Detect-Platform;
+
+    if ($platform.os -eq "WINNT") {
+        # Platform is Windows
+        return $env:TEMP
+    } elseif ($platform.os -eq "Linux") {
+        # Platform is Linux
+        return "/tmp"
+    } else {
+        # Platform is MacOS
+        return "/tmp"
+    }
+}
+
+# Get Zen Base Profile Directory
+function Get-Zen-BaseProfile-Dir {
+    $platform = Detect-Platform
+
+    if ($platform.os -eq "WINNT") {
+        # Windows
+        return "$env:APPDATA\zen\Profiles"
+    } elseif ($platform.os -eq "Linux") {
+        # Linux
+        return "$env:HOME\.zen"
+    } else {
+        # MacOS
+        # TODO: verify this location
+        return "$env:HOME\Library\Application Support\zen\Profiles"
     }
 }
 
@@ -45,33 +118,9 @@ Log-Message "Downloading and parsing JSON file from $jsonUrl."
 $jsonData = Invoke-RestMethod -Uri $jsonUrl
 
 # Determine the operating system and architecture
-$os = $null
-$arch = $null
-$regularArch = if ([System.Environment]::Is64BitProcess) { "x64" } else { "x86" }
-
-if ($PSVersionTable.PSVersion.Major -ge 6) {
-    # PowerShell Core (Cross-platform)
-    $osPlatform = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
-    if ($osPlatform) {
-        $os = "WINNT"
-        $arch = if ([System.Environment]::Is64BitProcess) { "x86_64-msvc" } else { "x86-msvc" }
-    } elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Linux)) {
-        $os = "Linux"
-        $arch = "x86_64-gcc3"
-    } elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::OSX)) {
-        $os = "Darwin"
-        $arch = if ([System.Environment]::Is64BitProcess) { "x86_64-gcc3" } else { "aarch64-gcc3" }
-    }
-} else {
-    # Windows PowerShell
-    $os = "WINNT"
-    $arch = if ([System.Environment]::Is64BitProcess) { "x86_64-msvc" } else { "x86-msvc" }
-}
-
-if (-not $os) {
-    Log-Message "Unsupported operating system. Exiting script." -important
-    exit 1
-}
+$platform = Detect-Platform
+$os = $platform.os
+$arch = $platform.arch
 
 Log-Message "Detected OS: $os, Architecture: $arch."
 
@@ -92,7 +141,9 @@ Log-Message "Will download ZIP file from: $zipUrl"
 Log-Message "Widevine version: $version"
 
 # Download the ZIP file
-$zipFile = "$env:TEMP\widevine.zip"
+$tempDir = OS-Temp-Directory
+$zipFile = "$tempDir\widevine.zip"
+
 if ($dryRun) {
     Log-Message "Dry run enabled. Skipping download of $zipUrl."
 } else {
@@ -101,7 +152,8 @@ if ($dryRun) {
 }
 
 # Define the base directory path where profiles might be stored
-$baseDir = "$env:APPDATA\zen\Profiles"
+$baseDir = Get-Zen-BaseProfile-Dir
+
 Log-Message "Searching for profiles in $baseDir."
 
 # Recursively search for all user profile folders at the root level
