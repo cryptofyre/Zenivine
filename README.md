@@ -1,3 +1,5 @@
+# This script is no longer supported, and will not be maintained further. 
+## For those using Apple Music consider using https://cider.sh instead for your playback needs.
 
 # Zenivine
 
